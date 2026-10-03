@@ -91,8 +91,6 @@ pyinstaller --onefile --noconsole --name campus-auto-login ^
   --hidden-import tkinter campus_login.py
 ```
 
-产物在 `dist/campus-auto-login.exe`。GitHub Actions 会在打 tag（`v*`）时自动构建并发布到 Releases。
+产物在 `dist/campus-auto-login.exe`。
 
-## 说明
 
-`config.ini` 和 `logs/` 已在 `.gitignore` 中，不会被提交到仓库。
