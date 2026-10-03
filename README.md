@@ -4,7 +4,7 @@
 
 登录默认无头模式，不弹窗口、不抢焦点；门户已处于登录状态时自动跳过，不会重复登录。
 
-## 快速开始（打包版）
+## 快速开始
 
 从 [Releases](https://github.com/Ray-Huan/campus-auto-login/releases) 下载 `campus-auto-login.exe`，双击运行。
 
