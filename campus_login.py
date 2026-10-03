@@ -445,7 +445,104 @@ def setup_logging():
         log.addHandler(sh)
 
 
+def _uninstall_confirm() -> bool:
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        ok = messagebox.askyesno(
+            "校园网自动登录 - 卸载",
+            "确定卸载吗？将删除配置、日志与开机自启设置。",
+        )
+        root.destroy()
+        return bool(ok)
+    except Exception:
+        return True
+
+
+def _uninstall_notify(removed: list):
+    msg = "已卸载，删除内容：\n" + "\n".join(removed)
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("校园网自动登录 - 卸载完成", msg)
+        root.destroy()
+    except Exception:
+        log.info("uninstall done: %s", removed)
+
+
+def do_uninstall() -> list:
+    """Remove config/logs, startup shortcut, then self-delete the exe."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    removed = []
+    if IS_FROZEN:
+        # BASE_DIR is a dedicated per-user dir; safe to remove entirely.
+        try:
+            shutil.rmtree(BASE_DIR, ignore_errors=True)
+            removed.append(str(BASE_DIR))
+        except Exception as exc:
+            log.error("failed to remove config dir: %r", exc)
+    else:
+        # Source checkout: remove only generated files, never the script dir.
+        try:
+            if CONFIG_FILE.exists():
+                CONFIG_FILE.unlink()
+                removed.append(str(CONFIG_FILE))
+        except Exception as exc:
+            log.error("failed to remove config: %r", exc)
+        try:
+            if LOG_DIR.exists():
+                shutil.rmtree(LOG_DIR, ignore_errors=True)
+                removed.append(str(LOG_DIR))
+        except Exception as exc:
+            log.error("failed to remove logs: %r", exc)
+
+    startup = (
+        Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows"
+        / "Start Menu" / "Programs" / "Startup" / "campus_login_auto.vbs"
+    )
+    try:
+        if startup.exists():
+            startup.unlink()
+            removed.append(str(startup))
+    except Exception as exc:
+        log.error("failed to remove startup script: %r", exc)
+
+    if IS_FROZEN:
+        exe = Path(sys.executable)
+        try:
+            bat = Path(tempfile.gettempdir()) / "campus_uninstall.bat"
+            bat.write_text(
+                "@echo off\r\n"
+                "ping 127.0.0.1 -n 2 > nul\r\n"
+                f'del /f /q "{exe}"\r\n'
+                f'del /f /q "{bat}"\r\n',
+                encoding="gbk",
+            )
+            subprocess.Popen(
+                ["cmd", "/c", str(bat)],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            removed.append(str(exe))
+        except Exception as exc:
+            log.error("failed to schedule self-delete: %r", exc)
+
+    return removed
+
+
 def main(once: bool = False):
+    if "--uninstall" in sys.argv:
+        # No file logging here: it would create/re-open the logs dir we remove.
+        if _uninstall_confirm():
+            removed = do_uninstall()
+            _uninstall_notify(removed)
+        return
     setup_logging()
     if not acquire_lock():
         log.info("another instance is running; exiting")

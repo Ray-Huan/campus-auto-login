@@ -66,6 +66,22 @@ CreateObject("WScript.Shell").Run """<exe 路径>""", 0, False
 
 取消自启：删除这个 .vbs 文件即可。
 
+## 卸载
+
+一键卸载会删除配置、日志、开机自启设置，并自删 exe。
+
+打包版：
+
+```bash
+campus-auto-login.exe --uninstall
+```
+
+源码版：
+
+```bash
+python campus_login.py --uninstall
+```
+
 ## 构建打包版
 
 ```bash
