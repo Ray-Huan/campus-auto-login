@@ -78,8 +78,7 @@ _opener = urllib.request.build_opener(
 )
 
 
-def is_online(timeout: float = 4.0) -> bool:
-    """True when the NCSI probe file is reachable (authenticated access)."""
+def _ncsi_probe(timeout: float) -> bool:
     try:
         req = urllib.request.Request(
             "http://www.msftconnecttest.com/connecttest.txt",
@@ -90,6 +89,14 @@ def is_online(timeout: float = 4.0) -> bool:
             return resp.status == 200 and "Microsoft Connect Test" in body
     except Exception:
         return False
+
+
+def is_online(timeout: float = 4.0) -> bool:
+    """True when the NCSI probe succeeds. One failure is retried once with a
+    short timeout so a transient hiccup is not mistaken for being offline."""
+    if _ncsi_probe(timeout):
+        return True
+    return _ncsi_probe(min(timeout, 2.0))
 
 
 def portal_reachable(host: str, timeout: float = 2.0) -> bool:
@@ -403,6 +410,15 @@ def main(once: bool = False):
                 if now < next_attempt:
                     time.sleep(5)
                     continue
+
+                cfg = load_config()  # hot reload: config edits apply without restart
+                if not cfg["username"]:
+                    log.warning("config has no username; waiting")
+                    next_attempt = now + 300
+                    time.sleep(5)
+                    continue
+                host = _portal_host(cfg["portal_url"])
+
                 log.info("offline and portal reachable; attempting login")
                 close_login_windows()
 
