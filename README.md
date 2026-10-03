@@ -77,6 +77,4 @@ pyinstaller --onefile --noconsole --name campus-auto-login ^
 
 产物在 `dist/campus-auto-login.exe`。
 
-## 说明
 
-`config.ini` 和 `logs/` 已在 `.gitignore` 中，不会被提交到仓库。
