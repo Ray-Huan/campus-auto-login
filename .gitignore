@@ -1,0 +1,5 @@
+# Local credentials & runtime artifacts (never commit)
+config.ini
+logs/
+__pycache__/
+*.pyc
