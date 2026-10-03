@@ -27,10 +27,7 @@ jobs:
           pip install pyinstaller playwright
 
       - name: Build executable
-        run: |
-          pyinstaller --onefile --noconsole --clean --name campus-auto-login ^
-            --collect-all playwright --hidden-import playwright.sync_api ^
-            --hidden-import tkinter campus_login.py
+        run: pyinstaller --onefile --noconsole --clean --name campus-auto-login --collect-all playwright --hidden-import playwright.sync_api --hidden-import tkinter campus_login.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
