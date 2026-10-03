@@ -13,6 +13,7 @@ Usage:
 import configparser
 import ctypes
 import logging
+import os
 import re
 import socket
 import sys
@@ -22,7 +23,13 @@ from ctypes import wintypes
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
+IS_FROZEN = getattr(sys, "frozen", False)
+if IS_FROZEN:
+    # Packaged exe: keep config/logs in a writable per-user location.
+    BASE_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "campus-auto-login"
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = BASE_DIR / "config.ini"
 LOG_DIR = BASE_DIR / "logs"
 LOCK_PORT = 56801
@@ -41,10 +48,6 @@ def load_config() -> dict:
         "portal_url": "http://192.168.0.101/",
     }
     if not CONFIG_FILE.exists():
-        log.error(
-            "config.ini not found: copy config.example.ini to config.ini "
-            "and fill in your account."
-        )
         return cfg
     parser = configparser.ConfigParser()
     try:
@@ -58,6 +61,68 @@ def load_config() -> dict:
     except Exception as exc:
         log.error("failed to parse config.ini: %r", exc)
     return cfg
+
+
+def save_config(cfg: dict) -> bool:
+    parser = configparser.ConfigParser()
+    parser["account"] = {
+        "username": cfg.get("username", ""),
+        "password": cfg.get("password", ""),
+        "isp": cfg.get("isp", ""),
+    }
+    parser["portal"] = {"url": cfg.get("portal_url", "http://192.168.0.101/")}
+    try:
+        BASE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            parser.write(f)
+        return True
+    except Exception as exc:
+        log.error("failed to save config: %r", exc)
+        return False
+
+
+def gui_configure(defaults: dict) -> dict:
+    """First-run dialog to collect portal URL / account / password / ISP."""
+    try:
+        import tkinter as tk
+    except ImportError:
+        log.error("tkinter is not available; edit %s manually.", CONFIG_FILE)
+        return defaults
+
+    result = dict(defaults)
+
+    def on_save():
+        result["portal_url"] = var_url.get().strip() or "http://192.168.0.101/"
+        result["username"] = var_user.get().strip()
+        result["password"] = var_pwd.get()
+        result["isp"] = var_isp.get().strip()
+        root.destroy()
+
+    root = tk.Tk()
+    root.title("校园网自动登录 - 首次配置")
+    root.resizable(False, False)
+
+    var_url = tk.StringVar(value=defaults.get("portal_url", "http://192.168.0.101/"))
+    var_user = tk.StringVar(value=defaults.get("username", ""))
+    var_pwd = tk.StringVar(value=defaults.get("password", ""))
+    var_isp = tk.StringVar(value=defaults.get("isp", "中国移动"))
+
+    def row(label, var, show=None):
+        frame = tk.Frame(root)
+        frame.pack(fill="x", padx=12, pady=5)
+        tk.Label(frame, text=label, width=10, anchor="e").pack(side="left")
+        tk.Entry(frame, textvariable=var, show=show, width=30).pack(
+            side="left", fill="x", expand=True
+        )
+
+    row("认证门户地址", var_url)
+    row("账号", var_user)
+    row("密码", var_pwd, show="*")
+    row("运营商", var_isp)
+
+    tk.Button(root, text="保存并启动", command=on_save, width=20).pack(pady=10)
+    root.mainloop()
+    return result
 
 
 def _portal_host(url: str) -> str:
@@ -387,8 +452,12 @@ def main(once: bool = False):
         return
     cfg = load_config()
     if not cfg["username"]:
-        log.error("no username in %s; exiting", CONFIG_FILE)
-        return
+        log.info("first run: opening configuration dialog")
+        cfg = gui_configure(cfg)
+        if not cfg["username"]:
+            log.info("no credentials provided; exiting")
+            return
+        save_config(cfg)
     host = _portal_host(cfg["portal_url"])
     log.info("started: portal=%s isp=%s", cfg["portal_url"], cfg["isp"] or "-")
 
